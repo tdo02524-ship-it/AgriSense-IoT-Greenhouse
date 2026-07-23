@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>He thong giam sat nha kinh trong nong nghiep</title>
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f4f7f9; margin: 0; padding: 0; }
+        .grid-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-top: 20px; }
+        .zone-card { background: #fff; padding: 20px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); border-top: 2px solid #ccc; cursor: pointer; border: 1px solid #eaeaea; }
+        .zone-title { font-size: 18px; font-weight: bold; margin-bottom: 15px; color: #333; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+        .zone-stat { margin-bottom: 12px; font-size: 15px; display: flex; justify-content: space-between; align-items: center; }
+        .zone-stat .label { color: #555; }
+        .zone-stat .value-box { font-weight: bold; }
+        .chart-card { background: #fff; padding: 20px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-top: 20px; min-height: 400px; border: 1px solid #eaeaea; }
+        .table-container { background: #fff; padding: 20px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); overflow-x: auto; margin-top: 20px; border: 1px solid #eaeaea;}
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { border: 1px solid #ddd; padding: 12px; text-align: center; }
+        th { background-color: #f0f0f0; color: #333; }
+        tr:nth-child(even) { background-color: #f9f9f9; }
+        .badge-warning { background-color: #ff9800; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; }
+        .badge-danger { background-color: #f44336; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; }
+        .back-btn { margin-bottom: 20px; padding: 8px 15px; cursor: pointer; border: 1px solid #ccc; border-radius: 5px; background-color: #f9f9f9; font-weight: bold;}
+        .back-btn:hover { background-color: #e0e0e0; }
+        .switch { position: relative; display: inline-block; width: 50px; height: 26px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 26px; }
+        .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: #4CAF50; }
+        input:checked + .slider:before { transform: translateX(24px); }
+        input:disabled + .slider { background-color: #e0e0e0; cursor: not-allowed; }
+        input:disabled + .slider:before { background-color: #b0bec5; }
+        .device-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #eee; }
+        .device-item:last-child { border-bottom: none; }
+        #loginBox { max-width: 400px; margin: 100px auto; padding: 40px; background: #fff; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); text-align: center; border: 1px solid #eaeaea; }
+        #loginBox h2 { color: #000; margin-bottom: 20px; }
+        #loginBox input { width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; }
+        .btn-login { background-color: #007bff; color: white; border: none; padding: 12px 20px; border-radius: 5px; cursor: pointer; font-weight: bold; width: 100%; transition: 0.3s; }
+        .btn-login:hover { background-color: #0056b3; }
+        body.is-app #chartsContainer { display: none !important; }
+        
+        /* CSS WiFi Styles */
+        .wifi-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #f5f5f5; cursor: pointer; transition: background 0.2s; }
+        .wifi-item:hover { background-color: #f0f7ff; }
+        .wifi-rssi { font-size: 12px; color: #666; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <div id="loginBox">
+        <h2>Dang Nhap He Thong</h2>
+        <input type="text" id="email" placeholder="Email hoac SDT">
+        <input type="password" id="password" placeholder="Mat khau">
+        <button class="btn-login" onclick="login()">Dang nhap</button>
+    </div>
+
+    <div id="dashboard" style="display: none; padding: 20px;">
+        <div class="top-bar" style="display: flex; justify-content: space-between; background: #fff; color: #000; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #eaeaea; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
+            <div class="top-bar-left">
+                <h1 class="top-bar-title" style="margin: 0; font-size: 20px; color: #000;">HE THONG GIAM SAT NONG NGHIEP TRONG NHA KINH</h1>
+            </div>
+            <div class="top-bar-right" style="text-align: right; font-weight: bold; color: #555;">
+                <div id="live-clock">Dang tai thoi gian...</div>
+            </div>
+        </div>
+
+        <div class="panel-card" id="mainPanel" style="background: #fff; padding: 20px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 20px; border: 1px solid #eaeaea;">
+            <div class="card-header">
+                <h3 id="user" class="card-title">Xin chao</h3>
+            </div>
+            <div class="control-buttons" style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px;">
+                <button onclick="giamsattongquan()" style="padding: 10px; cursor: pointer; background: #fff; border: 1px solid #ccc; border-radius: 5px; color: #000;">Giam sat tong quan</button>
+                <button onclick="giamsatchitiet()" style="padding: 10px; cursor: pointer; background: #fff; border: 1px solid #ccc; border-radius: 5px; color: #000;">Giam sat chi tiet</button>
+                <button onclick="theodoiThietbi()" style="padding: 10px; cursor: pointer; background: #fff; border: 1px solid #ccc; border-radius: 5px; color: #000;">Theo doi thiet bi</button>
+                <button onclick="vitriBando()" style="padding: 10px; cursor: pointer; background: #fff; border: 1px solid #ccc; border-radius: 5px; color: #000;">Vi tri ban do</button>
+                <button onclick="truyxuatbaocao()" style="padding: 10px; cursor: pointer; background: #fff; border: 1px solid #ccc; border-radius: 5px; color: #000;">Truy xuat bao cao</button>
+                <button onclick="caidat()" style="padding: 10px; cursor: pointer; background: #fff; border: 1px solid #ccc; border-radius: 5px; color: #000;">Cai dat</button>
+                <button onclick="thongtintaikhoan()" style="padding: 10px; cursor: pointer; background: #fff; border: 1px solid #ccc; border-radius: 5px; color: #000;">Tai khoan</button>
+                <button onclick="logout()" style="padding: 10px; cursor: pointer; color: red; background: #fff; border: 1px solid #ffcccc; border-radius: 5px;">Dang xuat</button>
+            </div>
+            <div class="sensor-box" style="display: flex; gap: 20px; font-size: 18px; font-weight: bold; border-top: 1px solid #eee; padding-top: 15px;">
+                <div> Nhiet do: <span id="temp" style="color: #d32f2f;">--</span> C</div>
+                <div> Do am: <span id="humi" style="color: #1976d2;">--</span> %</div>
+            </div>
+        </div>
+
+        <div id="giamsatPage" style="display: none; padding: 20px; background: #fff; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); border: 1px solid #eaeaea;">
+            <button class="back-btn" onclick="backDashboard()">Quay lai</button>
+            <h2 style="color: #333; margin-bottom: 20px;"> Giam sat he thong tong quan</h2>
+            <div class="sensor-box" style="display: flex; gap: 20px; margin-bottom: 20px;">
+                <div style="background: #f1f8e9; padding: 15px; border-radius: 8px; flex: 1; font-weight: bold;">Nhiet do TB: <span id="temp2" style="color:#d32f2f">--</span> C</div>
+                <div style="background: #e3f2fd; padding: 15px; border-radius: 8px; flex: 1; font-weight: bold;">Do am TB: <span id="humi2" style="color:#1976d2">--</span> %</div>
+            </div>
+        </div>
+
+        <div id="giamsatchitietPage" style="display: none; padding: 20px; background: #fff; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); border: 1px solid #eaeaea;">
+            <button class="back-btn" onclick="backDashboard()"> Quay lai</button>
+            <h2 style="color: #333; text-align: center;"> GIAM SAT CHI TIET KHU VUC</h2>
+            <div class="grid-container">
+                <div class="zone-card" onclick="openZoneDetail(1)">
+                    <div class="zone-title"> Khu vuc Nong Nghiep</div>
+                    <div class="zone-stat"><span class="label">Nhiet dd:</span> <span class="value-box"><span id="zt1" style="color: #d32f2f;">--</span> C</span></div>
+                    <div class="zone-stat"><span class="label">Do am:</span> <span class="value-box"><span id="zh1" style="color: #1976d2;">--</span> %</span></div>
+                    <div class="zone-stat"><span class="label">Nhiet de trung binh:</span> <span class="value-box"><span id="avgT1" style="color: #d32f2f;">--</span> C</span></div>
+                    <div class="zone-stat"><span class="label">Do am trung binh:</span> <span class="value-box"><span id="avgH1" style="color: #1976d2;">--</span> %</span></div>
+                    <div id="status-zone1" style="margin-top: 15px; padding: 10px; background: #e8f5e9; color: #2e7d32; text-align: center; border-radius: 5px;">Dang hoat dong</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="zoneDetailPage" style="display:none; padding:20px; background: #fff; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); border: 1px solid #eaeaea;">
+            <button class="back-btn" onclick="backDashboard()">Quay lai</button>
+            <div class="table-container" style="box-shadow: none; border: none; padding: 0;">
+                <h2 id="zoneTitle" style="color: #333;"> Chi tiet khu vuc</h2>
+                <div style="background: #f0f2f5; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: flex; gap: 10px; align-items: center;">
+                    <label><strong>Xem theo:</strong></label>
+                    <select id="timeFilter" style="padding: 8px; border-radius: 5px; border: 1px solid #ccc;">
+                        <option value="today">Hom nay</option>
+                        <option value="3days">3 ngay gan nhat</option>
+                        <option value="week">Tuan nay</option>
+                        <option value="month">Thang nay</option>
+                        <option value="all">Tat ca (100 ban ghi)</option>
+                    </select>
+                    <button onclick="loadZoneHistory()" style="background: #fff; color: #000; padding: 8px 20px; border: 1px solid #ccc; border-radius: 5px; cursor: pointer;">Xem</button>
+                    <button onclick="exportExcel()" style="background: #2e7d32; color: white; padding: 8px 20px; border: none; border-radius: 5px; cursor: pointer;">Xuat Excel</button>
+                </div>
+                <table id="zoneTable">
+                    <thead><tr><th>STT</th><th>Thoi gian</th><th>Nhiet do (C)</th><th>Do am (%)</th></tr></thead>
+                    <tbody id="zoneData"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="truyxuatbaocaoPage" style="display: none; padding: 20px; background: #fff; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); border: 1px solid #eaeaea;">
+            <button class="back-btn" onclick="backDashboard()">Quay lai</button>
+            <div class="table-container" style="box-shadow: none; border: none; padding: 0;">
+                <h2 style="color: #333; margin-bottom: 20px;"> Lich su bao cao he thong</h2>
+                <div style="margin-bottom: 15px;">
+                    <label>Loc tu ngay: <input type="date" style="padding: 5px; border: 1px solid #ccc; border-radius: 4px;"></label>
+                    <label style="margin-left: 10px;">Den ngay: <input type="date" style="padding: 5px; border: 1px solid #ccc; border-radius: 4px;"></label>
+                    <button style="padding: 6px 15px; background: #fff; color: #000; border: 1px solid #ccc; border-radius: 4px; cursor: pointer; margin-left: 10px;">Tim kiem</button>
+                </div>
+                <table>
+                    <thead><tr><th>Thoi gian</th><th>Khu vuc </th><th>Loai canh bao</th><th>Gia tri ghi nhan</th><th>Muc do</th></tr></thead>
+                    <tbody id="alertHistoryTableBody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="taikhoanPage" style="display: none; padding: 20px;">
+            <button class="back-btn" onclick="backDashboard()"> Quay lai</button>
+            <div style="max-width: 500px; background: #fff; padding: 40px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); border: 1px solid #eaeaea; margin: 0 auto; text-align: center;">
+                <div style="font-size: 60px; margin-bottom: 10px;">...</div>
+                <h2 style="color: #333; margin-bottom: 5px;">Thong tin tai khoan</h2>
+                <p style="color: #666; margin-bottom: 30px;">Quyen han: Quan tri vien </p>
+                <div style="text-align: left; margin-bottom: 20px;">
+                    <label style="display: block; color: #555; font-size: 14px; margin-bottom: 8px;">Email dang nhap</label>
+                    <input type="text" id="profileEmail" value="dongocbaotam@gmail.com" readonly style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 5px; background: #f9f9f9;">
+                </div>
+                <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+                <h3 style="text-align: left; color: #333; font-size: 16px;">Doi mat khau</h3>
+                <div style="text-align: left; margin-bottom: 15px;">
+                    <label style="display: block; color: #555; font-size: 14px; margin-bottom: 8px;">Mat khau cu</label>
+                    <input type="password" placeholder="Nhap mat khau cu" style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box;">
+                </div>
+                <div style="text-align: left; margin-bottom: 20px;">
+                    <label style="display: block; color: #555; font-size: 14px; margin-bottom: 8px;">Mat khau moi</label>
+                    <input type="password" placeholder="Nhap mat khau moi" style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box;">
+                </div>
+                <button onclick="alert('Cap nhat thong tin thanh cong!')" style="background-color: #fff; color: #000; border: 1px solid #ccc; padding: 12px 24px; border-radius: 5px; cursor: pointer; font-weight: bold;">Cap nhat</button>
+            </div>
+        </div>
+
+        <div id="caidatPage" style="display: none; padding: 20px;">
+            <button class="back-btn" onclick="backDashboard()"> Quay lai</button>
+            <div style="max-width: 600px; background: #fff; padding: 40px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); border: 1px solid #eaeaea; margin: 0 auto;">
+                <h2 style="text-align: center; margin-bottom: 30px; color: #333;"> CAI DAT CANH BAO</h2>
+                <div style="margin-bottom: 20px;">
+                    <label style="display: block; color: #555; font-size: 14px; margin-bottom: 8px;"><span style="color: red;">*</span> Nhiet do cai dat nho nhat</label>
+                    <input type="number" id="tempMin" value="21" style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box;">
+                </div>
+                <div style="margin-bottom: 20px;">
+                    <label style="display: block; color: #555; font-size: 14px; margin-bottom: 8px;"><span style="color: red;">*</span> Nhiet do cai dat lon nhat</label>
+                    <input type="number" id="tempMax" value="26.5" style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box;">
+                </div>
+                <div style="margin-bottom: 20px;">
+                    <label style="display: block; color: #555; font-size: 14px; margin-bottom: 8px;"><span style="color: red;">*</span> Do am cai dat nho nhat</label>
+                    <input type="number" id="humMin" value="40.6" style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box;">
+                </div>
+                <div style="margin-bottom: 25px;">
+                    <label style="display: block; color: #555; font-size: 14px; margin-bottom: 8px;"><span style="color: red;">*</span> Do am cai dat lon nhat</label>
+                    <input type="number" id="humMax" value="60.5" style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box;">
+                </div>
+                <button onclick="luuCaiDat()" style="background-color: #fff; color: #000; border: 1px solid #ccc; padding: 12px 24px; border-radius: 5px; cursor: pointer; font-weight: bold; width: 100%;">Luu Cai dat</button>
+            </div>
+        </div>
+
+        <div id="theodoiThietbiPage" style="display: none; padding: 20px; background: #fff; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); border: 1px solid #eaeaea;">
+            <button class="back-btn" onclick="backDashboard()"> Quay lai</button>
+            <h2 style="color: #333; text-align: center;"> THEO DOI VI TRI DIEU KHIEN THIET BI</h2>
+            <div class="grid-container">
+                <div class="zone-card" style="cursor: default;">
+                    <div class="zone-title">Khu Vuc Nong Nghiep</div>
+                    <div class="device-item">
+                        <span>May bom nuoc</span>
+                        <label class="switch"><input type="checkbox" id="ctrl-bom1" onchange="toggleDevice('bom1', this)" checked><span class="slider"></span></label>
+                    </div>
+                    <div class="device-item">
+                        <span>Dieu khien thiet bi phun suong</span>
+                        <label class="switch"><input type="checkbox" id="ctrl-quat1" onchange="toggleDevice('quat1', this)"><span class="slider"></span></label>
+                    </div>
+                    <div class="device-item">
+                        <span>Dieu khien thiet bi den suoi am</span>
+                        <label class="switch"><input type="checkbox" id="ctrl-den1" onchange="toggleDevice('den1', this)"><span class="slider"></span></label>
+                    </div>
+                    <div class="device-item">
+                        <span>Dieu khien thiet bi khac</span>
+                        <label class="switch"><input type="checkbox" id="ctrl-khac" onchange="toggleDevice('khac', this)"><span class="slider"></span></label>
+                    </div>
+                    
+                    <div class="device-item" style="margin-top: 15px; border-top: 1px dashed #eee; padding-top: 15px;">
+                        <span id="systemModeText" style="font-weight: bold;">Che do Tu dong hoat dong</span>
+                        <label class="switch">
+                            <input type="checkbox" id="systemModeSelect" onchange="switchSystemMode(this.checked ? 'AUTO' : 'MANUAL')" checked>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+
+                    <p style="text-align: right; margin-top: 10px; font-size: 13px; color: #666;" id="status-khu1">Dang hoat dong tu dong</p>
+                </div>
+
+                <div class="zone-card" style="cursor: default;">
+                    <div class="zone-title">Quan li Ket noi & Mang</div>
+                    <div class="device-item">
+                        <span>Trang thai mang hien tai:</span>
+                        <strong id="currentNetworkDisplay" style="color: #2e7d32;">Hoạt động</strong>
+                    </div>
+                    <div class="device-item" style="display: block; margin-top: 15px;">
+                        <span style="display: block; margin-bottom: 8px;"> Mang thu cong:</span>
+                        <select id="networkSelect" onchange="switchNetworkMode(this.value)" style="width: 100%; padding: 8px; border-radius: 5px; border: 1px solid #ccc;">
+                            <option value="AUTO">Che do Tu dong</option>
+                            <option value="WIFI">Che do WiFi</option>
+                            <option value="4G">Che do SIM 4G</option>
+                        </select>
+                    </div>
+
+                    <div id="wifiScanContainer" style="display: none; margin-top: 15px; padding-top: 15px; border-top: 1px dashed #ccc;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                            <span style="font-weight: bold; color: #333; font-size: 14px;">Wifi xung quanh thiet bi:</span>
+                            <button onclick="scanWifiNetworks()" style="padding: 4px 10px; background: #fff; border: 1px solid #ccc; border-radius: 4px; cursor: pointer; font-size: 12px;">Quet lai</button>
+                        </div>
+                        
+                        <div style="max-height: 150px; overflow-y: auto; border: 1px solid #ddd; border-radius: 5px; background: #fafafa; margin-bottom: 12px;">
+                            <div id="wifiListBody">
+                                <div style="padding: 10px; text-align: center; color: #888; font-size: 13px;">Dang quet cac mang WiFi...</div>
+                            </div>
+                        </div>
+
+                        <div id="wifiPasswordForm" style="display: none; background: #f0f4f8; padding: 12px; border-radius: 6px; border: 1px solid #d0d7de;">
+                            <div style="font-size: 13px; margin-bottom: 6px; font-weight: bold;">Ket noi toi: <span id="selectedSsidText" style="color:#1976d2;">--</span></div>
+                            <input type="hidden" id="selected-ssid">
+                            <input type="password" id="wifiPasswordInput" placeholder="Nhap mat khau WiFi" style="width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; margin-bottom: 8px;">
+                            <div style="display: flex; gap: 8px;">
+                                <button onclick="submitWifiConnect()" style="flex: 1; padding: 8px; background: #2e7d32; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 13px;">Ket noi</button>
+                                <button onclick="document.getElementById('wifiPasswordForm').style.display='none'" style="padding: 8px 12px; background: #e0e0e0; color: #333; border: none; border-radius: 4px; cursor: pointer; font-size: 13px;">Huy</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="vitriBandoPage" style="display: none; padding: 20px;">
+            <button class="back-btn" onclick="backDashboard()">Quay lai</button>
+            <h2 style="color: #333; text-align: center;"> VI TRI THIET BI</h2>
+            <div style="background: #fff; padding: 20px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); border: 1px solid #eaeaea;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 15px; font-size: 16px;">
+                    <div><strong>Toa do hien tai:</strong> Vi do: <span id="lat" style="color:red;">--</span> | Kinh do: <span id="lng" style="color:blue;">--</span></div>
+                    <div><strong>Trang thai tin hieu:</strong> <span style="color: green; font-weight: bold;">Ket noi tat</span></div>
+                </div>
+                <iframe id="mapIframe" width="100%" height="500" frameborder="0" style="border:0; border-radius: 8px;" src=""></iframe>
+                <div style="text-align: right; margin-top: 10px;">
+                    <button style="padding: 8px 15px; background: #fff; color: #000; border: 1px solid #ccc; border-radius: 5px; cursor: pointer;" onclick="alert('Da cap nhat vi tri moi nhat!')">Lam moi vi tri</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="chartsContainer">
+            <div class="chart-card">
+                <div class="card-header"><h2 class="card-title">Nhiet do </h2></div>
+                <div id="temperatureChart"></div>
+            </div>
+            <div class="chart-card">
+                <div class="card-header"><h2 class="card-title">Do am </h2></div>
+                <div id="humidityChart"></div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        if (window.location.href.includes("app=true")) {
+            document.body.classList.add("is-app");
+        }
+
+        const socket = io();
+        
+        socket.on("dong_bo_cong_tac", function(data) {
+            if (data.device) {
+                let congTac = document.querySelector("input[onchange*='" + data.device + "']");
+                if (congTac) {
+                    congTac.checked = (data.state === 'ON');
+                }
+            }
+        });
+        
+        let tempChart, humChart;
+        let isChartRendered = false;
+        let tempList = [];
+        let humList = [];
+        let tempSeries = [];
+        let humSeries = [];
+
+        function login(){
+            let email = document.getElementById("email").value;
+            let password = document.getElementById("password").value;
+
+            fetch("/login", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ email, password })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if(data.success){
+                    document.getElementById("loginBox").style.display = "none";
+                    document.getElementById("dashboard").style.display = "block";
+                    document.getElementById("user").innerText = " Xin chao: " + data.user;
+                    renderCharts();
+                } else {
+                    alert("Sai tai khoan!");
+                }
+            })
+            .catch(err => {
+                console.log("Khong co backend, tu chuyen trang");
+                document.getElementById("loginBox").style.display = "none";
+                document.getElementById("dashboard").style.display = "block";
+                renderCharts();
+            });
+        }
+        function logout(){ location.reload(); }
+
+        function hideAllPages() {
+            document.getElementById("mainPanel").style.display = "none";
+            document.getElementById("chartsContainer").style.display = "none";
+            document.getElementById("giamsatPage").style.display = "none";
+            document.getElementById("giamsatchitietPage").style.display = "none";
+            document.getElementById("truyxuatbaocaoPage").style.display = "none";
+            document.getElementById("taikhoanPage").style.display = "none";
+            document.getElementById("caidatPage").style.display = "none";
+            document.getElementById("zoneDetailPage").style.display = "none";
+            document.getElementById("theodoiThietbiPage").style.display = "none";
+            document.getElementById("vitriBandoPage").style.display = "none";
+        }
+
+        function backDashboard() {
+            hideAllPages();
+            document.getElementById("mainPanel").style.display = "block";
+            document.getElementById("chartsContainer").style.display = "block";
+            setTimeout(() => { window.dispatchEvent(new Event('resize')); }, 100);
+        }
+
+        function giamsattongquan() { hideAllPages(); document.getElementById("giamsatPage").style.display = "block"; }
+        function giamsatchitiet() { hideAllPages(); document.getElementById("giamsatchitietPage").style.display = "block"; }
+        function truyxuatbaocao() { hideAllPages(); document.getElementById("truyxuatbaocaoPage").style.display = "block"; fetchAlertHistory(); }
+        function thongtintaikhoan() { hideAllPages(); document.getElementById("taikhoanPage").style.display = "block"; }
+        function caidat() { hideAllPages(); document.getElementById("caidatPage").style.display = "block"; }
+        function theodoiThietbi() { hideAllPages(); document.getElementById("theodoiThietbiPage").style.display = "block"; }
+        function vitriBando() { hideAllPages(); document.getElementById("vitriBandoPage").style.display = "block"; }
+
+        function toggleDevice(deviceId, checkbox) {
+            let status = checkbox.checked ? "ON" : "OFF";
+            console.log("Gui lenh dieu khien thiet bi:", deviceId, status);
+            socket.emit("control_device", { device: deviceId, state: status });
+            document.getElementById("status-khu1").innerText = "Dang dieu khien thu cong...";
+            document.getElementById("status-khu1").style.color = "#ff9800";
+        }
+
+        // ĐỒNG BỘ 100% VỚI SERVER NODE.JS (WIFI THẬT QUA TOPIC "farm/wifi_results")
+        function switchNetworkMode(mode) {
+            socket.emit("control_device", { network: mode });
+            
+            let wifiContainer = document.getElementById("wifiScanContainer");
+            let passForm = document.getElementById("wifiPasswordForm");
+
+            if (mode === "WIFI") {
+                wifiContainer.style.display = "block";
+                document.getElementById("wifiListBody").innerHTML = `<div style="padding: 10px; text-align: center; color: #888; font-size: 13px;">Dang quet cac mang WiFi...</div>`;
+                // Kích hoạt lệnh quét thông qua websocket gửi tới server.js
+                socket.emit("wifi_request", { action: "scan_wifi" });
+            } else {
+                wifiContainer.style.display = "none";
+                passForm.style.display = "none";
+            }
+            console.log("Da yeu cau mach chuyen sang che do mang: " + mode);
+        }
+
+        function scanWifiNetworks() {
+            document.getElementById("wifiListBody").innerHTML = `<div style="padding: 10px; text-align: center; color: #888; font-size: 13px;">Dang quet lai...</div>`;
+            socket.emit("wifi_request", { action: "scan_wifi" });
+        }
+
+        // LẮNG NGHE KẾT QUẢ MẠNG THẬT TỪ ESP32 QUA ĐƯỜNG TRUYỀN SERVER
+        socket.on("wifi_list_update", function(realNetworks) {
+            console.log("Nhan danh sach mang WiFi thuc te:", realNetworks);
+            if (realNetworks && realNetworks.length > 0) {
+                renderWifiRows(realNetworks);
+            } else {
+                document.getElementById("wifiListBody").innerHTML = `<div style="padding: 10px; text-align: center; color: red; font-size: 13px;">Khong tim thay mang WiFi nao!</div>`;
+            }
+        });
+
+        function renderWifiRows(networks) {
+            let listBody = document.getElementById("wifiListBody");
+            if (!listBody) return;
+            listBody.innerHTML = "";
+            
+            networks.forEach(net => {
+                let signalText = "📶 Khoe";
+                let signalColor = "green";
+                if (net.rssi < -75) { signalText = "📶 Yeu"; signalColor = "red"; }
+                else if (net.rssi < -60) { signalText = "📶 Vua"; signalColor = "orange"; }
+
+                let row = document.createElement("div");
+                row.style.cssText = "padding: 10px 12px; cursor: pointer; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; font-size: 14px; transition: background 0.2s;";
+                row.onmouseover = function() { this.style.background = "#f0f7ff"; };
+                row.onmouseout = function() { this.style.background = "none"; };
+                
+                row.innerHTML = `
+                    <span style="font-weight: 500; color: #333;">${net.ssid}</span>
+                    <small style="color: ${signalColor}; font-weight: bold;">${signalText} (${net.rssi} dBm)</small>
+                `;
+                
+                row.onclick = () => { selectWifi(net.ssid); };
+                listBody.appendChild(row);
+            });
+        }
+
+        function selectWifi(ssid) {
+            document.getElementById("selected-ssid").value = ssid;
+            document.getElementById("selectedSsidText").innerText = ssid;
+            document.getElementById("wifiPasswordForm").style.display = "block";
+            document.getElementById("wifiPasswordInput").value = "";
+            document.getElementById("wifiPasswordInput").focus();
+        }
+
+        function submitWifiConnect() {
+            let ssid = document.getElementById("selected-ssid").value;
+            let password = document.getElementById("wifiPasswordInput").value;
+            
+            if (!password) {
+                alert("Vui long nhap mat khau WiFi!");
+                return;
+            }
+            
+            if (confirm(`Ban co chac chan muon ket noi he thong vao mang "${ssid}"?`)) {
+                // Sử dụng sự kiện wifi_request đã viết trong backend server.js để đồng bộ xuống ESP32
+                socket.emit("wifi_request", { 
+                    action: "connect_wifi", 
+                    ssid: ssid, 
+                    pass: password 
+                });
+                alert("Da gui yeu cau ket noi! Mach ESP32 dang thuc hien dong bo mang moi.");
+                document.getElementById("wifiPasswordForm").style.display = "none";
+            }
+        }
+
+        function switchSystemMode(mode) {
+            socket.emit("control_device", { mode: mode }); 
+            let statusText = document.getElementById("status-khu1"); 
+            let modeLabel = document.getElementById("systemModeText"); 
+            
+            let inputs = ['ctrl-bom1', 'ctrl-quat1', 'ctrl-den1', 'ctrl-khac']; 
+            inputs.forEach(id => {
+                let el = document.getElementById(id); 
+                if(el) el.disabled = (mode === "AUTO"); 
+            });
+
+            if (mode === "AUTO") {
+                if(modeLabel) modeLabel.innerText = "Che do Tu dong hoat dong"; 
+                statusText.innerText = "Dang hoat dong tu dong"; 
+                statusText.style.color = "#2e7d32"; 
+            } else {
+                if(modeLabel) modeLabel.innerText = "Che do Thu cong (Manual)"; 
+                statusText.innerText = "Dang dieu khien thu cong..."; 
+                statusText.style.color = "#ff9800"; 
+            }
+            alert("Da yeu cau mach chuyen sang che do van hanh: " + (mode === "AUTO" ? "Tu dong" : "Thu cong")); 
+        }
+
+        async function fetchAlertHistory() {
+            const tbody = document.getElementById("alertHistoryTableBody");
+            tbody.innerHTML = "<tr><td colspan='5' style='text-align:center;'>Dang tai du lieu canh bao...</td></tr>";
+            try {
+                const response = await fetch('/api/alerts');
+                const data = await response.json();
+                
+                if (data.length === 0) {
+                    tbody.innerHTML = "<tr><td colspan='5' style='text-align:center;'>Khong co lich su canh bao nao.</td></tr>";
+                    return;
+                }
+
+                let html = "";
+                data.forEach(item => {
+                    const timeStr = new Date(item.created_at).toLocaleString('vi-VN');
+                    const badgeClass = item.level === 'Nguy hiem' ? 'badge-danger' : 'badge-warning';
+                    html += `<tr>
+                        <td>${timeStr}</td>
+                        <td>${item.zone}</td>
+                        <td>${item.reason}</td>
+                        <td><strong style="color:#d32f2f">${item.value} C</strong></td>
+                        <td><span class="${badgeClass}">${item.level}</span></td>
+                    </tr>`;
+                });
+                tbody.innerHTML = html;
+            } catch (err) {
+                console.error("Loi tai lich su canh bao:", err);
+            }
+        }
+
+        socket.on("relay_status_update", (data) => {
+            if (data.bom1 !== undefined) document.querySelector("input[onchange*='bom1']").checked = (data.bom1 === "ON");
+            if (data.quat1 !== undefined) document.querySelector("input[onchange*='quat1']").checked = (data.quat1 === "ON");
+            if (data.den1 !== undefined) document.querySelector("input[onchange*='den1']").checked = (data.den1 === "ON");
+            if (data.khac !== undefined) document.querySelector("input[onchange*='khac']").checked = (data.khac === "ON");
+            
+            if (data.mode !== undefined) {
+                let modeSelect = document.getElementById("systemModeSelect");
+                let modeLabel = document.getElementById("systemModeText");
+                if (modeSelect) {
+                    modeSelect.checked = (data.mode === "AUTO");
+                    if (modeLabel) {
+                        modeLabel.innerText = (data.mode === "AUTO") ? "Che do Tu dong hoat dong" : "Che do Thu cong (Manual)";
+                    }
+                    let inputs = ['ctrl-bom1', 'ctrl-quat1', 'ctrl-den1', 'ctrl-khac'];
+                    inputs.forEach(id => {
+                        let el = document.getElementById(id);
+                        if(el) el.disabled = (data.mode === "AUTO");
+                    });
+                    let statusText = document.getElementById("status-khu1");
+                    if(data.mode === "AUTO") {
+                        statusText.innerText = "Dang hoat dong tu dong";
+                        statusText.style.color = "#2e7d32";
+                    } else {
+                        statusText.innerText = "Dang dieu khien thu cong...";
+                        statusText.style.color = "#ff9800";
+                    }
+                }
+            }
+        });
+
+        function openZoneDetail(zone) {
+            hideAllPages();
+            document.getElementById("zoneDetailPage").style.display = "block";
+            if(zone == 1) document.getElementById("zoneTitle").innerText = " Chi tiet khu vuc nong nghiep";
+            document.getElementById("timeFilter").value = "today";
+            loadZoneHistory();
+        }
+
+        async function loadZoneHistory() {
+            const period = document.getElementById("timeFilter").value;
+            const tbody = document.getElementById("zoneData");
+            tbody.innerHTML = "<tr><td colspan='4' style='text-align:center;'>Dang truy van Database...</td></tr>";
+
+            try {
+                const response = await fetch(`/api/sensor/${period}`);
+                if (!response.ok) throw new Error(`Loi he: ${response.status}`);
+                const data = await response.json();
+
+                if (!data || data.length === 0) {
+                    tbody.innerHTML = "<tr><td colspan='4' style='text-align:center;'>Khong co du lieu trong khoang thoi gian nay.</td></tr>";
+                    return;
+                }
+
+                let htmlContent = "";
+                data.forEach((item, index) => {
+                    const timeStr = item.created_at ? new Date(item.created_at).toLocaleString('vi-VN') : "N/A";
+                    const temp = (item.temperature != null) ? Number(item.temperature).toFixed(1) : "--";
+                    const humi = (item.humidity != null) ? Number(item.humidity).toFixed(1) : "--";
+                    htmlContent += `<tr><td>${index + 1}</td><td>${timeStr}</td><td style="color: #d32f2f; font-weight: bold;">${temp}C</td><td style="color: #1976d2; font-weight: bold;">${humi} %</td></tr>`;
+                });
+                tbody.innerHTML = htmlContent;
+
+            } catch (error) {
+                console.error("Loi Fetch:", error);
+                tbody.innerHTML = `<tr><td colspan='4' style='color:red; text-align:center;'>Loi ket noi Server</td></tr>`;
+            }
+        }
+
+        function exportExcel(){
+            let table = document.getElementById("zoneTable");
+            let wb = XLSX.utils.table_to_book(table);
+            XcontentFile = XLSX.writeFile(wb,"dulieukhuvuc.xlsx");
+        }
+
+        function luuCaiDat() {
+            let tMin = document.getElementById("tempMin").value;
+            let tMax = document.getElementById("tempMax").value;
+            let hMin = document.getElementById("humMin").value;
+            let hMax = document.getElementById("humMax").value;
+
+            const data = { tempMin: tMin, tempMax: tMax, humMin: hMin, humMax: hMax };
+
+            fetch("/api/settings", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(data)
+            })
+            .then(res => res.json())
+            .then(result => {
+                if(result.success) {
+                    alert("Da cap nhat thanh cong xuong mach ESP32!");
+                } else {
+                    alert("Loi cap nhat!");
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                alert("Khong the ket noi Server!");
+            });
+        }
+        
+        function updateClock() {
+            var now = new Date();
+            var hours = String(now.getHours()).padStart(2, '0');
+            var minutes = String(now.getMinutes()).padStart(2, '0');
+            var seconds = String(now.getSeconds()).padStart(2, '0');
+            var day = String(now.getDate()).padStart(2, '0');
+            var month = String(now.getMonth() + 1).padStart(2, '0');
+            var year = now.getFullYear();
+            document.getElementById('live-clock').textContent = hours + ":" + minutes + ":" + seconds + " - " + day + "/" + month + "/" + year;
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        socket.on("sensor_data", (data) => {
+            let t = parseFloat(data.temp);
+            let h = parseFloat(data.humi);
+
+            updateChart(t, h, data.timestamp);
+
+            if (!data.isOfflineData) {
+                document.getElementById("temp").innerText = data.temp;
+                document.getElementById("humi").innerText = data.humi;
+
+                if(data.net) {
+                    let netEl = document.getElementById("currentNetworkDisplay");
+                    if (netEl) {
+                        netEl.innerText = data.net;
+                        netEl.style.color = (data.net === "WIFI") ? "#1976d2" : "#ff9800";
+                    }
+                }
+
+                if(data.lat && data.lon) {
+                    let latEl = document.getElementById("lat");
+                    let lonEl = document.getElementById("lng");
+                    if(latEl && lonEl) {
+                        latEl.innerText = data.lat;
+                        lonEl.innerText = data.lon;
+                        
+                        let mapIframe = document.getElementById("mapIframe");
+                        let newSrc = `https://maps.google.com/maps?q=${data.lat},${data.lon}&hl=vi&z=16&output=embed`;
+                        if(mapIframe && mapIframe.src !== newSrc) {
+                            mapIframe.src = newSrc;
+                        }
+                    }
+                }
+
+                tempList.push(t);
+                humList.push(h);
+                if (tempList.length > 20) { tempList.shift(); humList.shift(); }
+
+                let avgTemp = tempList.reduce((a,b)=>a+b,0) / tempList.length;
+                let avgHum  = humList.reduce((a,b)=>a+b,0) / humList.length;
+
+                if(document.getElementById("temp2")) document.getElementById("temp2").innerText = avgTemp.toFixed(2);
+                if(document.getElementById("humi2")) document.getElementById("humi2").innerText = avgHum.toFixed(2);
+                if(document.getElementById("zt1")) document.getElementById("zt1").innerText = t.toFixed(1);
+                if(document.getElementById("zh1")) document.getElementById("zh1").innerText = h.toFixed(0);
+                if(document.getElementById("avgT1")) document.getElementById("avgT1").innerText = avgTemp.toFixed(1);
+                if(document.getElementById("avgH1")) document.getElementById("avgH1").innerText = avgHum.toFixed(1);
+            }
+        });
+
+        socket.on("device_status", (devices) => {
+            for (let id in devices) {
+                if (id === "DEVICE_1") {
+                    let el = document.getElementById("status-zone1");
+                    if (el) {
+                        if (devices[id].status === "ONLINE") {
+                            el.innerText = "Hoat dong"; el.style.background = "#e8f5e9"; el.style.color = "green";
+                        } else {
+                            el.innerText = "Khong hoat dong"; el.style.background = "#ffebee"; el.style.color = "red";
+                        }
+                    }
+                }
+            }
+        });
+
+        function renderCharts() {
+            if(isChartRendered) return;
+
+            tempChart = new ApexCharts(document.querySelector("#temperatureChart"), {
+                chart: { 
+                    type: 'line', 
+                    height: 350, 
+                    animations: { enabled: true, easing: 'linear', dynamicAnimation: { speed: 1000 } },
+                    toolbar: { show: true, tools: { zoom: true, pan: true, reset: true } },
+                    zoom: { enabled: true }
+                },
+                series: [{ name: "Nhiet do", data: [] }],
+                xaxis: { 
+                    type: 'datetime',
+                    labels: { datetimeUTC: false, format: 'HH:mm:ss' }
+                },
+                yaxis: { min: -10, max: 100 },
+                colors: ['#d32f2f']
+            });
+
+            humChart = new ApexCharts(document.querySelector("#humidityChart"), {
+                chart: { 
+                    type: 'line', 
+                    height: 350, 
+                    animations: { enabled: true, easing: 'linear', dynamicAnimation: { speed: 1000 } },
+                    toolbar: { show: true, tools: { zoom: true, pan: true, reset: true } },
+                    zoom: { enabled: true }
+                },
+                series: [{ name: "Do am", data: [] }],
+                xaxis: { 
+                    type: 'datetime',
+                    labels: { datetimeUTC: false, format: 'HH:mm:ss' }
+                },
+                yaxis: { min: 0, max: 100 },
+                colors: ['#1976d2']
+            });
+
+            tempChart.render();
+            humChart.render();
+            isChartRendered = true;
+            window.dispatchEvent(new Event('resize'));
+        }
+
+        function updateChart(temp, humi, timestamp){
+            if (!isChartRendered) return;
+            let time = timestamp || new Date().getTime();
+
+            tempSeries.push([time, parseFloat(temp)]);
+            humSeries.push([time, parseFloat(humi)]);
+
+            tempSeries.sort((a, b) => a[0] - b[0]);
+            humSeries.sort((a, b) => a[0] - b[0]);
+
+            if(tempSeries.length > 300){
+                tempSeries.shift();
+                humSeries.shift();
+            }
+
+            tempChart.updateSeries([{ data: tempSeries }]);
+            humChart.updateSeries([{ data: humSeries }]);
+        }
+    </script>
+</body>
+</html>
